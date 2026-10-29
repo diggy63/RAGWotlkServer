@@ -17,7 +17,7 @@ is fetched from the exact revisions in `modules.lock.json`, including the core
 and Playerbots versions from the original deployment. Both computers therefore
 use the same revisions. Changing a pin produces a new build directory and image
 tag; old sources and images are retained for recovery. The Dockerfile comes from
-the pinned core, with compiler parallelism limited to four jobs.
+the pinned core, with compiler parallelism limited to one job.
 
 ## Before the first installation
 
@@ -29,13 +29,35 @@ sudo apt update
 sudo apt install git python3
 ```
 
-Docker Engine and the Compose plugin must already work for your Linux user.
+Docker Engine, Buildx, and the Compose plugin must already work for your Linux user.
 Keep the deployment and build files inside the WSL Linux filesystem. Allow disk
 space for a full build, the database dump, saved images, and a compressed copy
 of the client data; backup size and build time depend on your current server.
 Keep WSL and the Windows host running until the command finishes.
 
-Create a dedicated ordinary WoW account and character for auction ownership.
+Builds run in a dedicated Docker-container Buildx builder limited to one CPU,
+3 GiB RAM, and 4 GiB total RAM plus swap (swap availability depends on WSL).
+The installer checks Docker's resource-limit support and the builder's actual
+limits. It also requires at least 4 GiB available inside WSL before starting.
+It refuses to fall back to an unrestricted build. The builder stops afterward,
+but its cache stays available for future runs. These limits affect compilation,
+not the running game server. They make compilation slower and cannot account
+for unrelated Windows applications using up host memory.
+
+If a previous unrestricted installation build is making the host unresponsive,
+press Ctrl+C in that terminal. If necessary, open another WSL terminal and run:
+
+```sh
+pkill -INT -f '^docker build --file .*\.module-build/'
+```
+
+Wait for it to stop before pulling and running the fixed script. If WSL has
+less than 4 GiB available, schedule a maintenance window and stop the game
+services yourself to free memory, leaving the database running. Do not increase
+compiler jobs or remove the memory limit to get past a failed build.
+
+Create a dedicated character on a normal player account for auction ownership;
+an existing player account is fine, so a new account is not required.
 For example, create a character named `Auctioneer` through the normal client,
 then log it out. Do not use a roaming bot, an addclass bot, or a character you
 intend to play. It needs no GM privileges. The installer looks up its GUID and

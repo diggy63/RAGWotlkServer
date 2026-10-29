@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 ROOT = Path(__file__).resolve().parents[1]
 DATABASES = ("acore_auth", "acore_characters", "acore_world", "acore_playerbots")
 CONFIGS = ("individualProgression.conf", "npc_enchanter.conf", "mod_ahbot.conf")
+BUILDER = "rag-modules-1cpu-3g-v1"
+BUILD_MEMORY = 3 * 1024 ** 3
+BUILD_MEMORY_SWAP = 4 * 1024 ** 3
 
 
 def run(args, *, capture=False, **kwargs):
@@ -65,7 +68,39 @@ def fetch_source(path, source):
     run(["git", "-C", str(path), "checkout", "--quiet", "--detach", source["commit"]])
 
 
+def limited_builder():
+    info = json.loads(run(["docker", "info", "--format", "{{json .}}"], capture=True))
+    if not all(info.get(key) for key in ("MemoryLimit", "SwapLimit", "CpuCfsPeriod", "CpuCfsQuota")):
+        raise ValueError("Docker cannot enforce build memory/CPU limits; refusing an unrestricted build")
+    available = next(int(line.split()[1]) * 1024 for line in Path("/proc/meminfo").read_text().splitlines()
+                     if line.startswith("MemAvailable:"))
+    if min(available, info["MemTotal"]) < BUILD_MEMORY + 1024 ** 3:
+        raise ValueError("Building needs at least 4 GiB available inside WSL; leave the server unchanged and free memory first")
+    run(["docker", "buildx", "version"])
+    try:
+        run(["docker", "buildx", "inspect", BUILDER], capture=True, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        run(["docker", "buildx", "create", "--name", BUILDER, "--driver", "docker-container",
+             "--driver-opt", "memory=3g", "--driver-opt", "memory-swap=4g",
+             "--driver-opt", "cpu-quota=100000", "--driver-opt", "cpu-period=100000"])
+    run(["docker", "buildx", "inspect", "--bootstrap", BUILDER])
+    container = json.loads(run(["docker", "inspect", f"buildx_buildkit_{BUILDER}0"], capture=True))[0]
+    limits = container["HostConfig"]
+    expected = {"Memory": BUILD_MEMORY, "MemorySwap": BUILD_MEMORY_SWAP,
+                "CpuQuota": 100000, "CpuPeriod": 100000}
+    if any(limits.get(key) != value for key, value in expected.items()):
+        raise ValueError("Builder limits do not match the safe defaults; refusing to compile")
+
+
 def build_images(lock, release):
+    limited_builder()
+    try:
+        return build_with_limits(lock, release)
+    finally:
+        run(["docker", "buildx", "stop", BUILDER])
+
+
+def build_with_limits(lock, release):
     directory = ROOT / ".module-build" / release
     directory.mkdir(parents=True, exist_ok=True)
     core = directory / "core"
@@ -97,7 +132,8 @@ def build_images(lock, release):
     recipe.write_text(dockerfile)
     images = {service: f"local/rag-{service}:{release}" for service in ("worldserver", "authserver")}
     for service in ("worldserver", "authserver"):
-        run(["docker", "build", "--file", str(recipe), "--target", service,
+        run(["docker", "buildx", "build", "--builder", BUILDER, "--load",
+             "--file", str(recipe), "--target", service,
              "--build-arg", "CTOOLS_BUILD=none", "--build-arg", "CTYPE=Release",
              "--build-arg", "CWITH_WARNINGS=OFF", "--tag", images[service], str(core)])
     return core, images

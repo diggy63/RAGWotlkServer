@@ -16,6 +16,41 @@ spec.loader.exec_module(installer)
 
 
 class ModuleInstallerTests(unittest.TestCase):
+    def test_builder_refuses_missing_limit_support_and_low_memory(self):
+        supported = {"MemoryLimit": True, "SwapLimit": True, "CpuCfsPeriod": True,
+                     "CpuCfsQuota": True, "MemTotal": 16 * 1024 ** 3}
+        for info, memory in (({**supported, "MemoryLimit": False}, "MemAvailable: 8388608 kB\n"),
+                             (supported, "MemAvailable: 1048576 kB\n")):
+            with patch.object(installer, "run", return_value=json.dumps(info)) as run, \
+                 patch.object(installer.Path, "read_text", return_value=memory):
+                with self.assertRaises(ValueError):
+                    installer.limited_builder()
+            self.assertEqual(run.call_count, 1)
+
+    def test_builder_checks_actual_cpu_and_memory_limits(self):
+        info = {"MemoryLimit": True, "SwapLimit": True, "CpuCfsPeriod": True,
+                "CpuCfsQuota": True, "MemTotal": 16 * 1024 ** 3}
+        limits = {"Memory": installer.BUILD_MEMORY, "MemorySwap": installer.BUILD_MEMORY_SWAP,
+                  "CpuQuota": 100000, "CpuPeriod": 100000}
+        for actual in (limits, {**limits, "Memory": 0}):
+            responses = [json.dumps(info), None, "existing builder", None,
+                         json.dumps([{"HostConfig": actual}])]
+            with patch.object(installer, "run", side_effect=responses), \
+                 patch.object(installer.Path, "read_text", return_value="MemAvailable: 8388608 kB\n"):
+                if actual == limits:
+                    installer.limited_builder()
+                else:
+                    with self.assertRaisesRegex(ValueError, "safe defaults"):
+                        installer.limited_builder()
+
+    def test_build_stops_limited_builder_after_compile_failure(self):
+        with patch.object(installer, "limited_builder"), \
+             patch.object(installer, "build_with_limits", side_effect=RuntimeError("compiler failed")), \
+             patch.object(installer, "run") as run:
+            with self.assertRaises(RuntimeError):
+                installer.build_images({}, "test")
+        run.assert_called_once_with(["docker", "buildx", "stop", installer.BUILDER])
+
     def test_matching_source_pin_is_reused_without_checkout_or_fetch(self):
         source = {"url": "https://github.com/example/module.git", "commit": "a" * 40}
         with tempfile.TemporaryDirectory() as directory:
