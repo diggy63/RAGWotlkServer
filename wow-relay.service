@@ -1,0 +1,16 @@
+[Unit]
+Description=Public WoW relay to the DigitalOcean Droplet
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/bin/ssh -F /dev/null -NTn \
+    -i %h/.ssh/id_ed25519_wow_relay \
+    -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+    -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=10 \
+    -R 0.0.0.0:3724:127.0.0.1:3724 \
+    -R 0.0.0.0:8085:127.0.0.1:8085 wow-relay@201.79.39.168
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

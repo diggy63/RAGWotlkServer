@@ -1,0 +1,89 @@
+name: diggy-wow
+services:
+  ac-database:
+    image: diggy-wow/database:20261027T194548Z
+    container_name: ac-database
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env}
+    volumes:
+      - database:/var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql -uroot -e 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+  ac-authserver:
+    image: diggy-wow/authserver:20261027T194548Z
+    container_name: ac-authserver
+    depends_on:
+      ac-database:
+        condition: service_healthy
+    environment:
+      AC_LOGIN_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_auth"
+      AC_LOGS_DIR: /azerothcore/env/dist/logs
+    volumes:
+      - ./config:/azerothcore/env/dist/etc
+      - ./logs:/azerothcore/env/dist/logs
+    ports:
+      - "127.0.0.1:3724:3724"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3724"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+  ac-worldserver:
+    image: diggy-wow/worldserver:20261027T194548Z
+    container_name: ac-worldserver
+    depends_on:
+      ac-database:
+        condition: service_healthy
+      ac-authserver:
+        condition: service_healthy
+    environment:
+      AC_LOGIN_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_auth"
+      AC_WORLD_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_world"
+      AC_CHARACTER_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_characters"
+      AC_PLAYERBOTS_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_playerbots"
+      AC_DATA_DIR: /azerothcore/env/dist/data
+      AC_LOGS_DIR: /azerothcore/env/dist/logs
+      AC_MAP_UPDATE_THREADS: "2"
+    volumes:
+      - ./config:/azerothcore/env/dist/etc
+      - ./logs:/azerothcore/env/dist/logs
+      - ./source/modules:/azerothcore/modules:ro
+      - ./source/data:/azerothcore/data:ro
+      - client-data:/azerothcore/env/dist/data:ro
+    ports:
+      - "127.0.0.1:8085:8085"
+    stdin_open: true
+    tty: true
+    restart: unless-stopped
+  migrate:
+    image: diggy-wow/worldserver:20261027T194548Z
+    profiles: [tools]
+    command: ["worldserver", "--dry-run"]
+    environment:
+      AC_LOGIN_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_auth"
+      AC_WORLD_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_world"
+      AC_CHARACTER_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_characters"
+      AC_PLAYERBOTS_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_playerbots"
+      AC_DATA_DIR: /azerothcore/env/dist/data
+      AC_LOGS_DIR: /azerothcore/env/dist/logs
+      AC_UPDATES_ENABLE_DATABASES: "7"
+      AC_PLAYERBOTS_ENABLED: "0"
+      AC_PLAYERBOTS_RANDOM_BOT_AUTOLOGIN: "0"
+    volumes:
+      - ./config:/azerothcore/env/dist/etc
+      - ./logs:/azerothcore/env/dist/logs
+      - ./source/modules:/azerothcore/modules:ro
+      - ./source/data:/azerothcore/data:ro
+      - client-data:/azerothcore/env/dist/data:ro
+volumes:
+  database:
+    name: diggy-wow-database
+  client-data:
+    name: diggy-wow-client-data
+

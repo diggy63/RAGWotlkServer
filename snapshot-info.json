@@ -1,0 +1,43 @@
+{
+  "prepared_at": "2026-10-27T19:46:56.327213+00:00",
+  "snapshot_type": "online database snapshot; final clean cutover backup still required",
+  "images": {
+    "worldserver": {
+      "tag": "diggy-wow/worldserver:20261027T194548Z",
+      "image_id": "sha256:f6ca71ef317a5cd7e49b2e89e5fdb36bba40f026e019bd94ee8def2fd60c825e",
+      "platform": "linux/amd64"
+    },
+    "authserver": {
+      "tag": "diggy-wow/authserver:20261027T194548Z",
+      "image_id": "sha256:f875395180a767997dc3649ece1fafea96469d96484719f3ee5a14d0b27be5a2",
+      "platform": "linux/amd64"
+    },
+    "database": {
+      "tag": "diggy-wow/database:20261027T194548Z",
+      "image_id": "sha256:76f0358884cb92d9a086d24e5671c38048d3fef40f2588703d73eb55392d6b69",
+      "platform": "linux/amd64"
+    }
+  },
+  "source_commits": {
+    "core": "3f2969ddb0da42b48b4fca050c02b19163ba1e20",
+    "playerbots": "e88cc4099e69f35126b28942a412ca702d20453b"
+  },
+  "snapshot_export_completed_at": "2026-10-27T19:52:34.068146+00:00",
+  "database_names": [
+    "acore_auth",
+    "acore_characters",
+    "acore_playerbots",
+    "acore_world"
+  ],
+  "validation": {
+    "compose": "passed",
+    "database_dump": "all four databases and completion marker present",
+    "docker_archive": "all three exact image tags present",
+    "client_data": "dbc, maps, vmaps, mmaps present",
+    "ssh_private_key_included": false,
+    "mysql_restore": "passed in isolated MySQL container with no network access",
+    "human_account_credentials": "all four accounts, password verifiers, expansion and GM permissions match source",
+    "player_characters_restored": 4
+  },
+  "validated_at": "2026-10-27T19:57:09.872452+00:00"
+}

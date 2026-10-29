@@ -1,0 +1,114 @@
+DIGGY WOW - WSL 2 MIGRATION BUNDLE
+
+This is a point-in-time database snapshot from the running NUC. The game was
+not stopped while preparing it. Recent unsaved character progress may be missing.
+Before the actual move, arrange a clean logout/stop and refresh the databases.
+Do not let players progress independently on both copies after the move.
+
+PRIVATE: the database contains account password hashes and personal account data.
+Send this archive privately. It does not contain the NUC's SSH private key.
+The supplied .env has a new database password specific to this destination.
+Existing WoW account passwords, administrator levels and characters are preserved.
+
+REQUIREMENTS
+- Intel/AMD x86-64 machine, Ubuntu on WSL 2 with systemd enabled.
+- Docker Engine and Docker Compose plugin INSIDE Ubuntu. Docker Desktop is not
+  supported on Windows Server. Install Engine using:
+  https://docs.docker.com/engine/install/ubuntu/
+- Run the commands below in Ubuntu, inside this extracted directory.
+- Keep the directory in the Linux filesystem, e.g. ~/wow-server, not /mnt/c.
+- Do not run a second existing server using the ac-* container names or the
+  diggy-wow volume names on this Docker host.
+
+RESTORE FOR TESTING (DO NOT START THE PUBLIC TUNNEL YET)
+
+1. Load the already compiled Linux images; no recompilation is needed:
+   docker load -i images.tar
+
+2. Restore the read-only game assets to their named volume:
+   docker volume create diggy-wow-client-data
+   docker run --rm --user 0 --entrypoint tar \
+     -v diggy-wow-client-data:/data \
+     -v "$PWD/client-data.tar:/backup.tar:ro" \
+     diggy-wow/worldserver:20261027T194548Z -xf /backup.tar -C /data
+
+3. Set writable configuration/log directories to the image's user (UID 1000):
+   docker compose run --rm --no-deps --user 0 --entrypoint chown \
+     ac-worldserver -R 1000:1000 /azerothcore/env/dist/etc /azerothcore/env/dist/logs
+
+4. Start the database and wait until it is healthy:
+   docker compose up -d --wait ac-database
+
+5. Import all four game databases (do not import into a server with existing data):
+   docker compose exec -T ac-database sh -c \
+     'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysql -uroot' < databases.sql
+
+6. Validate/update the restored schema using the matching world server:
+   docker compose run --rm --no-deps migrate
+   This must end with "AzerothCore Dry Run Completed" and exit successfully.
+
+7. Start the realm:
+   docker compose up -d ac-authserver ac-worldserver
+   docker compose ps
+   docker compose logs --tail=40 ac-worldserver
+   First startup can take several minutes while bots initialize.
+
+SETTINGS
+- 100 roaming bots, target 50 online, randomized 1-3 hour sessions.
+- Starting levels 65-70. Online bots fully active (SmartScale disabled).
+- Accounts, GM permissions and characters come from the database snapshot.
+- Game ports bind only to 127.0.0.1 for the outbound SSH relay.
+- Do not run docker compose down -v: that deletes the restored databases/data.
+
+PUBLIC TUNNEL CUTOVER (COORDINATE WITH DANIEL)
+The public realm remains wow.danielkanczugowski.com / 201.79.39.168.
+Only one server can own the Droplet's 3724/8085 reverse forwards at a time.
+
+1. Generate a fresh key ON THIS NEW MACHINE:
+   mkdir -p ~/.ssh
+   chmod 700 ~/.ssh
+   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_wow_relay -N '' -C 'friend-wow-relay'
+   cat ~/.ssh/id_ed25519_wow_relay.pub
+   Send only the public .pub key to Daniel. Never send the private key.
+
+2. Daniel adds that public key to the Droplet's restricted wow-relay account
+   and allows the new host's public IP on TCP 22 in the DigitalOcean firewall.
+   Preserve the existing home/admin IP rule. Game-port allowlists stay in place.
+
+3. Trust the existing verified Droplet host key supplied in this private bundle:
+   cat droplet-known-hosts >> ~/.ssh/known_hosts
+   chmod 600 ~/.ssh/known_hosts
+
+4. Install the user service, but DO NOT start it before the old tunnel is stopped:
+   mkdir -p ~/.config/systemd/user
+   cp wow-relay.service ~/.config/systemd/user/
+   systemctl --user daemon-reload
+   sudo loginctl enable-linger "$USER"
+
+5. At the agreed cutover, Daniel logs everyone out and takes a final clean backup,
+   then stops the OLD game server and OLD wow-relay service on the NUC.
+   Restore that final database backup on the new host with its game services
+   stopped, following steps 5-7 above. Then start the NEW tunnel:
+   systemctl --user enable --now wow-relay.service
+   systemctl --user status wow-relay.service
+
+6. Test a real WoW login through the public hostname, both administrators,
+   player characters and the bot pool. Retain the stopped NUC copy for rollback.
+
+WINDOWS REBOOT / SLEEP
+- Enable Docker inside Ubuntu: sudo systemctl enable --now docker
+- systemd services do not by themselves guarantee WSL stays running.
+- Use Windows Task Scheduler, under the SAME Windows account that installed
+  Ubuntu, to launch WSL at startup and keep it alive:
+  Program: C:\Windows\System32\wsl.exe
+  Arguments: -d Ubuntu --exec /bin/sleep infinity
+  Replace Ubuntu with the actual name from wsl -l -v. Do not run this as SYSTEM.
+  Disable the task's execution time limit and configure restart on failure.
+- Disable host sleep and test an unattended reboot before relying on this host.
+
+SOURCE / REBUILD
+The exact core/module source is in source/ for maintenance. The images are
+already compiled; restoring does not use docker compose build.
+Snapshot details and exact image/source identifiers are in snapshot-info.json.
+
+This destination has not been tested on your friend's Windows/WSL system yet.
