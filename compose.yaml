@@ -49,7 +49,7 @@ services:
       AC_PLAYERBOTS_DATABASE_INFO: "ac-database;3306;root;${MYSQL_ROOT_PASSWORD};acore_playerbots"
       AC_DATA_DIR: /azerothcore/env/dist/data
       AC_LOGS_DIR: /azerothcore/env/dist/logs
-      AC_MAP_UPDATE_THREADS: "2"
+      AC_MAP_UPDATE_THREADS: "4"
     volumes:
       - ./config:/azerothcore/env/dist/etc
       - ./logs:/azerothcore/env/dist/logs

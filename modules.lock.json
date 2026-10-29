@@ -1,0 +1,25 @@
+{
+  "build_jobs": 4,
+  "core": {
+    "url": "https://github.com/mod-playerbots/azerothcore-wotlk.git",
+    "commit": "3f2969ddb0da42b48b4fca050c02b19163ba1e20"
+  },
+  "modules": {
+    "mod-playerbots": {
+      "url": "https://github.com/mod-playerbots/mod-playerbots.git",
+      "commit": "e88cc4099e69f35126b28942a412ca702d20453b"
+    },
+    "mod-individual-progression": {
+      "url": "https://github.com/ZhengPeiRu21/mod-individual-progression.git",
+      "commit": "4933d455d2f611eed50c74c68c78832df4ed37a3"
+    },
+    "mod-npc-enchanter": {
+      "url": "https://github.com/azerothcore/mod-npc-enchanter.git",
+      "commit": "af32add66eafc0e0eb8775999e76ceed75f18b74"
+    },
+    "mod-ah-bot-plus": {
+      "url": "https://github.com/NathanHandley/mod-ah-bot-plus.git",
+      "commit": "f685832994c825f90aa5a3dc0e1620aa568e875b"
+    }
+  }
+}

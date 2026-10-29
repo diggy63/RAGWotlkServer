@@ -1,4 +1,13 @@
 .env
+.env.*
+!.env.example
 *.tar
+*.tar.gz
 *.sql
+*.sql.gz
 logs/
+backups/
+.module-build/
+.module-install.lock
+compose.override.yaml
+__pycache__/
